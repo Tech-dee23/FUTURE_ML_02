@@ -1,75 +1,72 @@
 import pandas as pd
-import re
+import numpy as np
 import matplotlib.pyplot as plt
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.linear_model import LogisticRegression
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from sklearn.metrics.pairwise import cosine_similarity
 
-# Synthetic ticket data (8 samples – expandable)
-data = {
-    'ticket': [
-        "Cannot login to my account, password reset not working",
-        "Payment failed but card is valid, need refund",
-        "How do I update my billing address?",
-        "App crashes when I open settings on Android",
-        "Request for account deletion and data export",
-        "Where can I find my invoice for last month?",
-        "Server down in US East region, urgent!",
-        "Login page takes too long to load, 504 error"
-    ],
-    'category': ['Account', 'Payment', 'Billing', 'Bug', 'Account', 'Billing', 'Outage', 'Bug'],
-    'priority': ['high', 'high', 'low', 'medium', 'low', 'low', 'high', 'medium']
+# ============ Job Description ============
+job_desc = """
+We are looking for a Senior Python Developer with strong experience in Django,
+REST APIs, and PostgreSQL. Familiarity with AWS, Docker, and CI/CD pipelines is a plus.
+The candidate should have excellent problem-solving skills and work well in agile teams.
+"""
+
+# ============ Sample Resumes ============
+resumes = {
+    'Candidate_A': "Python developer with 6 years in Django, Django REST framework. Built RESTful APIs, used PostgreSQL. Deployed apps on AWS EC2 and Docker. Familiar with CI/CD.",
+    'Candidate_B': "Data scientist skilled in R and Python. Machine learning, TensorFlow, SQL. No backend web framework experience.",
+    'Candidate_C': "Full stack developer proficient in React, Node.js, MongoDB. Some Python scripting but no Django. Worked in agile teams.",
+    'Candidate_D': "Backend engineer, 4 years Python, Flask, FastAPI, PostgreSQL, Docker, AWS Lambda, Terraform. Strong problem-solving.",
+    'Candidate_E': "Junior Python developer, 1 year Django, basic REST knowledge, MySQL. No cloud experience. Enthusiastic and quick learner."
 }
-df = pd.DataFrame(data)
 
-# Text cleaning
-def clean(text):
-    text = text.lower()
-    text = re.sub(r'[^a-z0-9\s]', '', text)
-    return text
+# ============ Required Skills ============
+required_skills = ['python', 'django', 'rest', 'postgresql', 'aws', 'docker']
 
-df['clean_ticket'] = df['ticket'].apply(clean)
+# ============ TF‑IDF & Similarity ============
+corpus = [job_desc] + list(resumes.values())
+vectorizer = TfidfVectorizer(stop_words='english')
+tfidf_matrix = vectorizer.fit_transform(corpus)
 
-# Split data
-X_train, X_test, y_train, y_test = train_test_split(
-    df['clean_ticket'], df['category'], test_size=0.25, random_state=42, stratify=df['category']
-)
+job_vec = tfidf_matrix[0]
+resume_vecs = tfidf_matrix[1:]
+scores = cosine_similarity(job_vec, resume_vecs).flatten()
 
-# TF‑IDF vectorization
-vectorizer = TfidfVectorizer(stop_words='english', max_features=100)
-X_train_vec = vectorizer.fit_transform(X_train)
-X_test_vec = vectorizer.transform(X_test)
+# Build results DataFrame
+results = pd.DataFrame({
+    'Resume': list(resumes.keys()),
+    'Score': np.round(scores, 3),
+    'Text': list(resumes.values())
+}).sort_values('Score', ascending=False).reset_index(drop=True)
 
-# Logistic Regression model
-model = LogisticRegression()
-model.fit(X_train_vec, y_train)
-y_pred = model.predict(X_test)
+# ============ Skill Gap Analysis ============
+def find_missing(text):
+    text_lower = text.lower()
+    missing = [skill for skill in required_skills if skill not in text_lower]
+    return ', '.join(missing) if missing else 'None'
 
-# Classification report
-print(classification_report(y_test, y_pred, zero_division=0))
+results['Missing Skills'] = results['Text'].apply(find_missing)
 
-# Confusion matrix plot
-fig, ax = plt.subplots(figsize=(6, 4))
-cm = confusion_matrix(y_test, y_pred, labels=model.classes_)
-disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=model.classes_)
-disp.plot(ax=ax, cmap='Blues', xticks_rotation=45)
-plt.title('Support Ticket Classification – Confusion Matrix')
+# ============ Console Output ============
+print("\n📊 CANDIDATE RANKING\n")
+print(results[['Resume', 'Score', 'Missing Skills']].to_string(index=False))
+
+# ============ Visual Ranking ============
+plt.figure(figsize=(10, 5))
+bars = plt.barh(results['Resume'], results['Score'], color='steelblue')
+plt.xlabel('Match Score (cosine similarity)')
+plt.title('Resume Screening – Candidate Ranking for Senior Python Developer')
+plt.gca().invert_yaxis()  # highest on top
+
+# Add score labels
+for bar, score in zip(bars, results['Score']):
+    plt.text(bar.get_width() + 0.002, bar.get_y() + bar.get_height()/3, f'{score:.2f}', va='center')
+
 plt.tight_layout()
-plt.savefig('confusion_matrix.png', dpi=150)
+plt.savefig('candidate_ranking.png', dpi=150)
 plt.show()
 
-# Priority tagging logic (rule‑based)
-priority_keywords = {
-    'outage': 'high', 'urgent': 'high', 'error': 'medium',
-    'bug': 'medium', 'crash': 'medium', 'how': 'low'
-}
-def assign_priority(text):
-    for word, prio in priority_keywords.items():
-        if word in text:
-            return prio
-    return 'medium'
-
-df['predicted_priority'] = df['clean_ticket'].apply(assign_priority)
-print("\nSample output with priority:")
-print(df[['ticket', 'category', 'predicted_priority']].head(8).to_string(index=False))
+# ============ Exact Skill Gap Report ============
+print("\n🔍 SKILL GAP DETAIL (required: Python, Django, REST, PostgreSQL, AWS, Docker)\n")
+for _, row in results.iterrows():
+    print(f"{row['Resume']}: {row['Missing Skills']}")
